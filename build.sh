@@ -13,17 +13,17 @@ flags=(
 
 inc=(
     -I.
-    -Iimgtool
     -Ifract
     -Iutopia
+    -Iimgtool
     -Ispxe
 )
 
 lib=(
     -Llib
-    -limgtool
     -lfract
     -lutopia
+    -limgtool
     -lz
     -lpng
     -ljpeg
@@ -60,8 +60,6 @@ build() {
     lib_build utopia static
     lib_build fract static
     lib_build imgtool static
-    lib_build mass static
-    lib_build photon static
 }
 
 comp() {

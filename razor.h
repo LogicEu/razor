@@ -16,13 +16,18 @@ extern "C" {
 #include <imgtool.h>
 #include <spxe.h>
 
+#define Z_NEAR 0.1
+#define Z_FAR 1000.0
+
 typedef struct Vertex {
-    vec2 pos;
+    vec3 pos;
     vec2 uvs;
 } Vertex;
 
-void plot(Px* dest, const Px src, const int x, const int y);
 void rasterize(Px* dest, const bmp_t* src, Vertex* p);
+void rasterinit(const int width, const int height);
+void rasterdeinit(void);
+void rasterclear(void);
 
 #ifdef __cplusplus
 }
