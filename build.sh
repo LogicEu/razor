@@ -17,6 +17,7 @@ inc=(
     -Iutopia
     -Iimgtool
     -Ispxe
+    -Imass
 )
 
 lib=(
@@ -24,6 +25,7 @@ lib=(
     -lfract
     -lutopia
     -limgtool
+    -lmass
     -lz
     -lpng
     -ljpeg
@@ -60,6 +62,7 @@ build() {
     lib_build utopia static
     lib_build fract static
     lib_build imgtool static
+    lib_build mass static
 }
 
 comp() {

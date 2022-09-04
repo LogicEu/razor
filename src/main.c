@@ -2,10 +2,11 @@
 #include <razor.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <mass.h>
 
-#define SENSIBILITY (-0.001)
+#define SENSIBILITY (-0.01)
 #define HALF_PI (M_PI * 0.5)
-#define FOV_DEGREES (45.0)
+#define FOV_DEGREES (25.0)
 #define FOV (FOV_DEGREES / (180.0 / M_PI))
 
 typedef struct Tri {
@@ -17,17 +18,17 @@ static inline vec4 vec4_fill(const vec3 v, const float f)
     return (vec4){v.x, v.y, v.z, f};
 }
 
-static Tri project(const Vertex* vertices, const mat4* mvp)
+static Tri project(const mat4* mvp, const vec3* pos, const vec2* uv)
 {
     Tri t;
     for (int i = 0; i < 3; ++i) {
-        vec4 p = vec4_mult_mat4(vec4_fill(vertices[i].pos, 1.0), *mvp);
+        vec4 p = vec4_mult_mat4(vec4_fill(pos[i], 1.0), *mvp);
         p = (vec4){p.x / p.w, p.y / p.w, p.z, p.w};
-        t.vertices[i].pos.x = (p.x * (float)spxe.scrres.width) / (2.0f * p.w) + spxe.scrres.width * 0.5;
-        t.vertices[i].pos.y = (p.y * (float)spxe.scrres.height) / (2.0f * p.w) + spxe.scrres.height * 0.5;
-        t.vertices[i].pos.z = 1.0 / p.w;
-        t.vertices[i].uvs.x = vertices[i].uvs.x * t.vertices[i].pos.z;
-        t.vertices[i].uvs.y = vertices[i].uvs.y * t.vertices[i].pos.z;
+        t.vertices[i].pos.x = 2.5 * (p.x * (float)spxe.scrres.width) / p.w + spxe.scrres.width * 0.5;
+        t.vertices[i].pos.y = 2.5 * (p.y * (float)spxe.scrres.height) / p.w + spxe.scrres.height * 0.5;
+        t.vertices[i].pos.z = 1.0 / p.z;
+        t.vertices[i].uvs.x = uv[i].x * t.vertices[i].pos.z;
+        t.vertices[i].uvs.y = uv[i].y * t.vertices[i].pos.z;
     }
     return t;
 }
@@ -46,39 +47,45 @@ int main(const int argc, char** argv)
         }
     }
 
-    //bmp_t bmp = bmp_load("image.png");
-    bmp_t bmp = bmp_new(2, 2, 4);
-    bmp.pixels[0] = 255, bmp.pixels[1] = 0, bmp.pixels[2] = 0, bmp.pixels[3] = 255;
-    bmp.pixels[4] = 0, bmp.pixels[5] = 255, bmp.pixels[6] = 0, bmp.pixels[7] = 255;
-    bmp.pixels[8] = 0, bmp.pixels[9] = 0, bmp.pixels[10] = 255, bmp.pixels[11] = 255;
-    bmp.pixels[12] = 255, bmp.pixels[13] = 255, bmp.pixels[14] = 255,
-    bmp.pixels[15] = 255;
+    const char* fileimg = "assets/image.png";
+    bmp_t bmp = bmp_load(fileimg);
+    if (!bmp.pixels) {
+        printf("razor could not open image file '%s'.\n", fileimg);
+        return EXIT_SUCCESS;
+    }
+
+    const char* fileobj = "assets/voxel.obj";
+    Mesh3D mesh = mesh3D_load(fileobj);
+    if (!mesh.vertices.size) {
+        printf("razor could not open 3D model from file '%s'.\n", fileobj);
+        bmp_free(&bmp);
+        return EXIT_FAILURE;
+    }
 
     Px* pixbuf = spxeStart("razor", 800, 600, width, height);
     if (!pixbuf) {
         printf("razor could not initiate spxe pixel engine.\n");
+        bmp_free(&bmp);
+        mesh3D_free(&mesh);
         return EXIT_FAILURE;
     }
-
+    
+    spxeMouseVisible(0);
     rasterinit(width, height);
 
+    float angle = 0.0;
     const float halfWidth = (float)width * 0.5;
     const float halfHeight = (float)height * 0.5;
     const float aspect = (float)width / (float)height;
     const mat4 proj = mat4_perspective(FOV, aspect, Z_NEAR, Z_FAR);
     
-    vec3 dir, right, up, pos = {40.0, 40.0, 20.0};
-    mat4 view, mvp;
+    vec3 dir, right, up, pos = {0.0, 0.0, 4.0};
+    mat4 view, mvp, scale;
     vec2 mouse;
 
-    Vertex tri[] = {
-        {{10.0, 10.0, 0.0}, {0.0, 0.0}},
-        {{10.0, 100.0, 0.0}, {0.0, 1.0}},
-        {{100.0, 100.0, 0.0}, {1.0, 1.0}},
-        {{10.0, 10.0, 0.0}, {0.0, 0.0}},
-        {{100.0, 100.0, 0.0}, {1.0, 1.0}},
-        {{100.0, 10.0, 0.0}, {1.0, 0.0}}
-    };
+    const size_t tricount =  mesh.vertices.size / 3;
+    const vec3* vertices = mesh.vertices.data;
+    const vec2* uvs = mesh.uvs.data;
 
     float T = spxeTime();
     while (spxeRun(pixbuf)) {
@@ -86,7 +93,10 @@ int main(const int argc, char** argv)
         float dT = T - t;
         T = t;
 
-        const float f = dT * 50.0;
+        const float f = dT * 10.0;
+        if (spxeKeyDown(M)) {
+            angle += dT;
+        }
 
         if (spxeKeyPressed(ESCAPE)) {
             break;
@@ -117,23 +127,25 @@ int main(const int argc, char** argv)
         spxeMousePos(&mousex, &mousey);
         mouse = (vec2){((float)mousex - halfWidth) * SENSIBILITY, ((float)mousey - halfHeight) * SENSIBILITY};
 
-        dir = (vec3){-cosf(mouse.y) * sinf(mouse.x), sinf(mouse.y), cosf(mouse.y) * cosf(mouse.x)};
-        right = (vec3){-sinf(mouse.x - HALF_PI), 0.0, cosf(mouse.x - HALF_PI)};
+        dir = vec3_normal((vec3){-cosf(mouse.y) * sinf(mouse.x), sinf(mouse.y), cosf(mouse.y) * cosf(mouse.x)});
+        right = vec3_normal((vec3){-sinf(mouse.x - HALF_PI), 0.0, cosf(mouse.x - HALF_PI)});
         up = vec3_cross(dir, right);
         
+        scale = mat4_model(vec3_uni(0.0), vec3_uni(1.0), (vec3){0.0, 1.0, 0.0}, angle);
         view = mat4_look_at(pos, vec3_add(pos, dir), up);
-        mvp = mat4_mult(proj, view);
+        mvp = mat4_mult(proj, mat4_mult(view, scale));
 
         memset(pixbuf, 155, width * height * sizeof(Px));
         rasterclear();
 
-        for (int i = 0; i < 2; ++i) {
-            Tri t = project(tri + i * 3, &mvp);
+        for (size_t i = 0; i < tricount; ++i) {
+            Tri t = project(&mvp, vertices + i * 3, uvs + i * 3);
             rasterize(pixbuf, &bmp, t.vertices);
         }
     }
-
-    bmp_free(&bmp);
     rasterdeinit();
+
+    mesh3D_free(&mesh);
+    bmp_free(&bmp);
     return spxeEnd(pixbuf);
 }

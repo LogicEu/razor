@@ -10,3 +10,6 @@
 [submodule "spxe"]
 	path = spxe
 	url = git@github.com:LogicEu/spxe.git
+[submodule "mass"]
+	path = mass
+	url = git@github.com:LogicEu/mass.git

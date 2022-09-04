@@ -4,7 +4,7 @@ STD=-std=c99
 WFLAGS=-Wall -Wextra
 OPT=-O2
 IDIR=-I. -Ispxe
-LIBS=fract utopia imgtool
+LIBS=fract utopia imgtool mass
 CC=gcc
 NAME=razor
 SRC=src/*.c

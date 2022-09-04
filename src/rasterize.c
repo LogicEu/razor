@@ -1,6 +1,7 @@
 #include <razor.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 #define ULRP(a, b, t) (unsigned char)(int)_lerpf((float)(a), (float)(b), (t))
 #define SWAP(a, b, type) do { type tmp = (a); (a) = (b); (b) = tmp; } while (0)
@@ -64,6 +65,8 @@ static void scanline(Px* dest, const bmp_t* src, const int y, ivec2 xRange, vec2
             rasterizer.zbuffer[y * rasterizer.width + x] = z;
             vec2 uv = vec2_mult(vec2_lerp(uvRange[0], uvRange[1], t), z);
             Px col = texmap(src, uv);
+            //z = 1.0 / z;
+            //col = (Px){ULRP(col.r, 0, z), ULRP(col.g, 0, z), ULRP(col.b, 0, z), ULRP(col.a, 0, z)};
             memcpy(dest + ((y * rasterizer.width) + x), &col, sizeof(Px));
         }
     }
@@ -78,7 +81,7 @@ void rasterize(Px* dest, const bmp_t* src, Vertex* p)
     const float x0 = p[0].pos.x, y0 = p[0].pos.y;
     const float x2 = p[2].pos.x, y2 = p[2].pos.y;
 
-    if (y0 == y2) {
+    if (y0 >= y2) {
         return;
     }
 
@@ -89,14 +92,14 @@ void rasterize(Px* dest, const bmp_t* src, Vertex* p)
     int n = 0;
     for (int y = starty; y < endy; ++y) {
         
-        n += (y == midy);
-        
-        const float tLong = clampf(ilerpf(y0, y2, y), 0.0, 1.0);
-        const float tShort = clampf(ilerpf(p[n].pos.y, p[n + 1].pos.y, y), 0.0, 1.0);
+        n += !n && (y == midy || y < (int)p[n].pos.y || y > (int)p[n + 1].pos.y);
+
+        const float tLong = ilerpf((int)y0, (int)y2, y);
+        const float tShort = ilerpf((int)p[n].pos.y, (int)p[n + 1].pos.y, y);
 
         ivec2 xRange = {
-            (int)lerpf(x0, x2, tLong),
-            (int)lerpf(p[n].pos.x, p[n + 1].pos.x, tShort)
+            lerpf(x0, x2, tLong),
+            lerpf(p[n].pos.x, p[n + 1].pos.x, tShort)
         };
 
         vec2 zRange = {
@@ -104,14 +107,11 @@ void rasterize(Px* dest, const bmp_t* src, Vertex* p)
             lerpf(p[n].pos.z, p[n + 1].pos.z, tShort)
         };
 
-        vec2 uvRange[] = {{
-            lerpf(p[0].uvs.x, p[2].uvs.x, tLong),
-            lerpf(p[0].uvs.y, p[2].uvs.y, tLong),
-        }, {
-            lerpf(p[n].uvs.x, p[n + 1].uvs.x, tShort),
-            lerpf(p[n].uvs.y, p[n + 1].uvs.y, tShort),
-        }};
-        
+        vec2 uvRange[] = {
+            vec2_lerp(p[0].uvs, p[2].uvs, tLong),
+            vec2_lerp(p[n].uvs, p[n + 1].uvs, tShort)
+        };
+
         scanline(dest, src, y, xRange, zRange, uvRange);
     }
 }
