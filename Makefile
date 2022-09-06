@@ -15,7 +15,7 @@ LSTATIC=$(patsubst %,lib%.a,$(LIBS))
 LPATHS=$(patsubst %,$(LDIR)/%,$(LSTATIC))
 LFLAGS=$(patsubst %,-L%,$(LDIR))
 LFLAGS += $(patsubst %,-l%,$(LIBS))
-LFLAGS += -lz -lpng -ljpeg
+LFLAGS += -lz -lpng -ljpeg -lfreetype
 GL=-lglfw
 
 SCRIPT=build.sh

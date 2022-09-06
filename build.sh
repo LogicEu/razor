@@ -29,6 +29,7 @@ lib=(
     -lz
     -lpng
     -ljpeg
+    -lfreetype
 )
 
 linux=(
