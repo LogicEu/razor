@@ -16,7 +16,7 @@ static inline Px texmap(const bmp_t* bmp, const vec2 uv)
 static inline RZvertex rzVertexLerp(const RZvertex A, const RZvertex B, const int y)
 {
     const float t = ilerpf((int)A.pos.y, (int)B.pos.y, y);
-    return (RZvertex){vec3_lerp(A.pos, B.pos, t), vec2_lerp(A.uvs, B.uvs, t)};
+    return (RZvertex){vec3_lerp(A.pos, B.pos, t), vec2_lerp(A.uv, B.uv, t), vec3_lerp(A.normal, B.normal, t)};
 }
 
 static inline void rzVertexSort(RZvertex* restrict a, RZvertex* restrict b)
@@ -44,6 +44,8 @@ static inline Px texlerp(const bmp_t* bmp, const vec2 uv)
 
 static inline void scanline(RZframebuffer* framebuffer, const bmp_t* bmp, const int y, RZvertex p0, RZvertex p1)
 {
+    static const vec3 up = {0.0, 1.0, 0.0};
+
     if (p0.pos.x > p1.pos.x) {
         swap(p0, p1, RZvertex);
     }
@@ -56,8 +58,11 @@ static inline void scanline(RZframebuffer* framebuffer, const bmp_t* bmp, const 
         float z = 1.0 / lerpf(p0.pos.z, p1.pos.z, t);
         if (z > Z_NEAR && z < Z_FAR && z < framebuffer->zbuffer[y * framebuffer->bitmap.width + x]) {
             framebuffer->zbuffer[y * framebuffer->bitmap.width + x] = z;
-            vec2 uv = vec2_mult(vec2_lerp(p0.uvs, p1.uvs, t), z);
-            Px col = texmap(bmp, uv);
+            vec2 uv = vec2_mult(vec2_lerp(p0.uv, p1.uv, t), z);
+            vec3 n = vec3_normal(vec3_lerp(p0.normal, p1.normal, t));
+            Px col = texlerp(bmp, uv);
+            const float f = clampf((1.0 + _vec3_dot(n, up)) * 0.5, 0.4, 1.0);
+            col = (Px){(int)(f * (float)col.r), (int)(f * (float)col.g), (int)(f * (float)col.b), (int)(f * (float)col.a)};
             memcpy(framebuffer->bitmap.pixels + ((y * framebuffer->bitmap.width) + x) * sizeof(Px), &col, sizeof(Px));
         }
     }

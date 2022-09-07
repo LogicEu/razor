@@ -10,17 +10,18 @@
 #define FOV_DEGREES (15.0)
 #define FOV (FOV_DEGREES / (180.0 / M_PI))
 
-static RZtriangle rzTriangleProject(const mat4* mvp, const vec3* pos, const vec2* uv)
+static RZtriangle rzTriangleProject(const mat4* mvp, const vec3* pos, const vec2* uv, const vec3* normals)
 {
     RZtriangle t;
     for (int i = 0; i < 3; ++i) {
         vec4 p = vec4_mult_mat4((vec4){pos[i].x, pos[i].y, pos[i].z, 1.0}, *mvp);
-        p = (vec4){p.x / p.w, p.y / p.w, p.z, p.w};
-        t.vertices[i].pos.x = PERSPECTIVE_SCALE * (p.x * (float)spxe.scrres.width) / p.w + spxe.scrres.width * 0.5;
-        t.vertices[i].pos.y = PERSPECTIVE_SCALE * (p.y * (float)spxe.scrres.height) / p.w + spxe.scrres.height * 0.5;
+        vec4 n = vec4_mult_mat4((vec4){normals[i].x, normals[i].y, normals[i].z, 0.0}, *mvp);
+        t.vertices[i].pos.x = PERSPECTIVE_SCALE * ((p.x / p.w) * (float)spxe.scrres.width) / p.w + spxe.scrres.width * 0.5;
+        t.vertices[i].pos.y = PERSPECTIVE_SCALE * ((p.y / p.w) * (float)spxe.scrres.height) / p.w + spxe.scrres.height * 0.5;
         t.vertices[i].pos.z = 1.0 / p.z;
-        t.vertices[i].uvs.x = 2.0 * uv[i].x * t.vertices[i].pos.z;
-        t.vertices[i].uvs.y = 2.0 * uv[i].y * t.vertices[i].pos.z;
+        t.vertices[i].uv.x = uv[i].x * t.vertices[i].pos.z;
+        t.vertices[i].uv.y = uv[i].y * t.vertices[i].pos.z;
+        t.vertices[i].normal = (vec3){n.x, n.y, n.z};
     }
     return t;
 }
@@ -33,10 +34,64 @@ static float rzTriangleArea(const RZtriangle t)
         (t.vertices[2].pos.x * t.vertices[0].pos.y - t.vertices[0].pos.x * t.vertices[2].pos.y));
 }
 
+static vec3 rzTriangleNormal(const RZtriangle t)
+{
+    vec3 e1 = _vec3_sub(t.vertices[1].pos, t.vertices[0].pos);
+    vec3 e2 = _vec3_sub(t.vertices[2].pos, t.vertices[0].pos);
+    return vec3_normal(_vec3_cross(e1, e2));
+}
+
+static void rzMeshNormalAverage(const array_t* positions, array_t* normals)
+{
+    array_t eq = array_create(sizeof(size_t));
+    vec3* pos = positions->data, *n = normals->data;
+    for (size_t i = 0; i < positions->size; ++i) {
+        vec3 sum = {0.0, 0.0, 0.0};
+        for (size_t j = 0; j < positions->size; ++j) {
+            if (!memcmp(pos + i, pos + j, sizeof(vec3))) {
+                sum = vec3_add(sum, n[j]);
+                array_push(&eq, &j);
+            }
+        }
+
+        sum = vec3_normal(sum);
+        const size_t* indices = eq.data;
+        for (size_t j = 0; j < eq.size; ++j) {
+            n[indices[j]] = sum;
+        }
+        
+        array_clear(&eq);
+    }
+    array_free(&eq);
+}
+
+static void rzMeshNormalize(Mesh3D* mesh)
+{
+    RZtriangle t;
+    const vec3 vZero = {0.0, 0.0, 0.0};
+
+    const vec3* vertices = mesh->vertices.data;
+    const vec2* uvs = mesh->uvs.data;
+    const size_t size = mesh->vertices.size;
+
+    array_free(&mesh->normals);
+    mesh->normals = array_reserve(sizeof(vec3), size);
+    
+    for (size_t i = 0; i < size; i += 3) {
+        for (int j = 0; j < 3; ++j) {
+            t.vertices[j] = (RZvertex){vertices[i + j], uvs[i + j], vZero};
+        }
+        
+        const vec3 normal = rzTriangleNormal(t);
+        for (int j = 0; j < 3; ++j) {
+            array_push(&mesh->normals, &normal);
+        }
+    }
+}
+
 int main(const int argc, char** argv)
 {
-    int width = 200, height = 150, mousex, mousey;
-    
+    int width = 200, height = 150, mousex, mousey;  
     for (int i = 1; i < argc - 1; ++i) {
         if (argv[i][0] == '-') {
             if (argv[i][1] == 'w') {
@@ -50,7 +105,7 @@ int main(const int argc, char** argv)
 
     const char* fileimg = "assets/textures/image.png";
     const char* filefont = "assets/fonts/Pixeled.ttf";
-    const char* fileobj = "assets/models/bunny.obj";
+    const char* fileobj = "assets/models/suzanne.obj";
 
     bmp_t bmp = bmp_load(fileimg);
     if (!bmp.pixels) {
@@ -75,6 +130,14 @@ int main(const int argc, char** argv)
         memset(mesh.uvs.data, 0, mesh.uvs.size * mesh.uvs.bytes);
     }
 
+    rzMeshNormalize(&mesh);
+    rzMeshNormalAverage(&mesh.vertices, &mesh.normals);
+
+    const size_t vertcount =  mesh.vertices.size;;
+    const vec3* vertices = mesh.vertices.data;
+    const vec2* uvs = mesh.uvs.data;
+    const vec3* normals = mesh.normals.data;
+
     Px* pixbuf = spxeStart("razor", 800, 600, width, height);
     if (!pixbuf) {
         printf("razor could not initiate spxe pixel engine.\n");
@@ -96,10 +159,6 @@ int main(const int argc, char** argv)
     mat4 view, mvp, scale;
     vec2 mouse;
 
-    const size_t vertcount =  mesh.vertices.size;;
-    const vec3* vertices = mesh.vertices.data;
-    const vec2* uvs = mesh.uvs.data;
-
     const Px red = {255, 0, 0, 255};
     const ivec2 texPos = {10.0, 10.0};
     const vec3 vZero = {0.0, 0.0, 0.0};
@@ -115,9 +174,7 @@ int main(const int argc, char** argv)
         //printf("T: %f\n", dT);
 
         const float f = dT * 10.0;
-        if (spxeKeyDown(M)) {
-            angle += dT;
-        }
+        angle += dT;
 
         if (spxeKeyPressed(ESCAPE)) {
             break;
@@ -158,14 +215,14 @@ int main(const int argc, char** argv)
 
         rzFramebufferClear(&framebuffer);
         for (size_t i = 0; i < vertcount; i += 3) {
-            RZtriangle t = rzTriangleProject(&mvp, vertices + i, uvs + i);
-            if (rzTriangleArea(t) > 0.0) {
+            RZtriangle t = rzTriangleProject(&mvp, vertices + i, uvs + i, normals + i);
+            if (rzTriangleArea(t) < 0.0) {
                 rzRasterize(&framebuffer, &bmp, t);
             }
         }
         rzFontDrawText(&framebuffer.bitmap, font, "Razor", red, texPos);
     }
-    
+
     free(framebuffer.zbuffer);
     mesh3D_free(&mesh);
     bmp_free(&bmp);

@@ -37,7 +37,8 @@ typedef struct RZframebuffer {
 
 typedef struct RZvertex {
     vec3 pos;
-    vec2 uvs;
+    vec2 uv;
+    vec3 normal;
 } RZvertex;
 
 typedef struct RZtriangle {
