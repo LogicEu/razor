@@ -30,6 +30,7 @@ ifeq ($(OS),Darwin)
 	DLIB += -framework OpenGL
 else
 	DLIB += -lGL -lGLEW -lm
+	INC += -I/usr/include/freetype2
 endif
 
 CFLAGS = $(STD) $(WFLAGS) $(OPT) $(INC)

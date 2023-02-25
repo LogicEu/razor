@@ -45,6 +45,7 @@ if echo "$OSTYPE" | grep -q "darwin"; then
         -framework OpenGL
     )
 elif echo "$OSTYPE" | grep -q "linux"; then
+    inc+=(-I/usr/include/freetype2)
     lib+=(
         -lGL
         -lGLEW

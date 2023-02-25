@@ -50,7 +50,8 @@ static inline void scanline(RZframebuffer* framebuffer, const bmp_t* bmp, const 
         swap(p0, p1, RZvertex);
     }
 
-    const int endx = (int)p1.pos.x < (int)framebuffer->bitmap.width ? (int)p1.pos.x : framebuffer->bitmap.width;
+    const int endx = (int)p1.pos.x < (int)framebuffer->bitmap.width ? 
+                    (int)p1.pos.x : (int)framebuffer->bitmap.width;
     const int startx = (int)p0.pos.x >= 0 ? (int)p0.pos.x : 0;
     
     for (int x = startx; x < endx; ++x) {
