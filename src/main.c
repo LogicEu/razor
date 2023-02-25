@@ -41,16 +41,16 @@ static vec3 rzTriangleNormal(const RZtriangle t)
     return vec3_normal(_vec3_cross(e1, e2));
 }
 
-static void rzMeshNormalAverage(const array_t* positions, array_t* normals)
+static void rzMeshNormalAverage(const struct vector* positions, struct vector* normals)
 {
-    array_t eq = array_create(sizeof(size_t));
+    struct vector eq = vector_create(sizeof(size_t));
     vec3* pos = positions->data, *n = normals->data;
     for (size_t i = 0; i < positions->size; ++i) {
         vec3 sum = {0.0, 0.0, 0.0};
         for (size_t j = 0; j < positions->size; ++j) {
             if (!memcmp(pos + i, pos + j, sizeof(vec3))) {
                 sum = vec3_add(sum, n[j]);
-                array_push(&eq, &j);
+                vector_push(&eq, &j);
             }
         }
 
@@ -60,9 +60,9 @@ static void rzMeshNormalAverage(const array_t* positions, array_t* normals)
             n[indices[j]] = sum;
         }
         
-        array_clear(&eq);
+        vector_clear(&eq);
     }
-    array_free(&eq);
+    vector_free(&eq);
 }
 
 static void rzMeshNormalize(Mesh3D* mesh)
@@ -74,8 +74,8 @@ static void rzMeshNormalize(Mesh3D* mesh)
     const vec2* uvs = mesh->uvs.data;
     const size_t size = mesh->vertices.size;
 
-    array_free(&mesh->normals);
-    mesh->normals = array_reserve(sizeof(vec3), size);
+    vector_free(&mesh->normals);
+    mesh->normals = vector_reserve(sizeof(vec3), size);
     
     for (size_t i = 0; i < size; i += 3) {
         for (int j = 0; j < 3; ++j) {
@@ -84,7 +84,7 @@ static void rzMeshNormalize(Mesh3D* mesh)
         
         const vec3 normal = rzTriangleNormal(t);
         for (int j = 0; j < 3; ++j) {
-            array_push(&mesh->normals, &normal);
+            vector_push(&mesh->normals, &normal);
         }
     }
 }
@@ -105,7 +105,7 @@ int main(const int argc, char** argv)
 
     const char* fileimg = "assets/textures/image.png";
     const char* filefont = "assets/fonts/Pixeled.ttf";
-    const char* fileobj = "assets/models/suzanne.obj";
+    const char* fileobj = "assets/models/voxel.obj";
 
     bmp_t bmp = bmp_load(fileimg);
     if (!bmp.pixels) {
@@ -126,7 +126,7 @@ int main(const int argc, char** argv)
     }
 
     if (!mesh.uvs.size) {
-        mesh.uvs = array_reserve(sizeof(vec2), mesh.vertices.size);
+        mesh.uvs = vector_reserve(sizeof(vec2), mesh.vertices.size);
         memset(mesh.uvs.data, 0, mesh.uvs.size * mesh.uvs.bytes);
     }
 

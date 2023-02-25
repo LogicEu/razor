@@ -11,10 +11,9 @@ extern "C" {
 @Eugenio Arteaga A.
 ******************/
 
-#include <utopia.h>
-#include <fract.h>
-#include <imgtool.h>
-#include <spxe.h>
+#include <spxe.h>       /* Px       */
+#include <fract.h>      /* vec3     */
+#include <imgtool.h>    /* bmp_t    */
 
 #define Z_NEAR 0.1
 #define Z_FAR 1000.0
@@ -23,12 +22,9 @@ extern "C" {
 #define ulerp(A, B, t) (unsigned char)(int)_lerpf((float)(A), (float)(B), (t))
 #define pxlerp(A, B, t) (Px){ulerp(A.r, B.r, t), ulerp(A.g, B.g, t), ulerp(A.b, B.b, t), ulerp(A.a, B.a, t)}
 
-typedef struct RZfont {
-    unsigned char* pixmap;
-    ivec2 size;
-    ivec2 bearing;
-    unsigned int advance;
-} RZfont;
+typedef struct ivec2 {
+    int x, y;
+} ivec2;
 
 typedef struct RZframebuffer {
     bmp_t bitmap;
@@ -44,6 +40,13 @@ typedef struct RZvertex {
 typedef struct RZtriangle {
     RZvertex vertices[3];
 } RZtriangle;
+
+typedef struct RZfont {
+    unsigned char* pixmap;
+    ivec2 size;
+    ivec2 bearing;
+    unsigned int advance;
+} RZfont;
 
 void rzRasterize(RZframebuffer* framebuffer, const bmp_t* bmp, RZtriangle tri);
 

@@ -1,129 +1,120 @@
 #!/bin/bash
 
 name=razor
+
 cc=gcc
 src=src/*.c
 
 flags=(
     -Wall
     -Wextra
+    -pedantic
     -O2
     -std=c99
 )
 
+sub=(
+    imgtool
+    fract
+    mass
+    utopia
+)
+
 inc=(
     -I.
-    -Ifract
-    -Iutopia
-    -Iimgtool
     -Ispxe
-    -Imass
 )
 
 lib=(
     -Llib
-    -lfract
-    -lutopia
-    -limgtool
-    -lmass
     -lz
     -lpng
     -ljpeg
+    -lglfw
     -lfreetype
 )
 
-linux=(
-    -lm
-    -lpthread
-    -D_POSIX_C_SOURCE=199309L
-)
+for mod in ${sub[*]}
+do
+    inc+=(-I$mod)
+    lib+=(-l$mod)
+done
 
-glmac=(
-    -lglfw
-    -framework OpenGL
-)
+if echo "$OSTYPE" | grep -q "darwin"; then
+    lib+=(
+        -framework OpenGL
+    )
+elif echo "$OSTYPE" | grep -q "linux"; then
+    lib+=(
+        -lGL
+        -lGLEW
+        -lm
+    )
+else
+    echo "This OS is not supported by this shell script yet..." && exit
+fi
 
-gllin=(
-    -lglfw
-    -lGL
-    -lGLEW
-)
-
-exe() {
+cmd() {
     echo "$@" && $@
 }
 
 lib_build() {
-    pushd $1/ && ./build.sh $2 && mv *.a ../lib/ && popd
+    cmd pushd $1/ && ./build.sh $2 && cmd mv bin/*.a ../lib/ && cmd popd
 }
 
 build() {
-    [ ! -d lib ] && mkdir lib && echo "mkdir lib"
-    
-    lib_build utopia static
-    lib_build fract static
-    lib_build imgtool static
-    lib_build mass static
+    cmd mkdir -p lib/
+    for mod in ${sub[*]}
+    do
+        lib_build $mod static
+    done
+}
+
+objs() {
+    [ ! -d lib/ ] && build
+    cmd mkdir -p tmp/
+    cmd $cc -c $src ${flags[*]} ${inc[*]} && cmd mv *.o tmp/
 }
 
 comp() {
-    if echo "$OSTYPE" | grep -q "darwin"; then
-        exe $cc $src -o $name ${flags[*]} ${inc[*]} ${lib[*]} ${glmac[*]}
-    elif echo "$OSTYPE" | grep -q "linux"; then
-        exe $cc $src -o $name ${flags[*]} ${inc[*]} ${lib[*]} ${linux[*]} ${gllin[*]}
-    else
-        echo "This OS not supported yet" && exit
-    fi
+    objs && cmd $cc tmp/*.o $rt -o $name ${flags[*]} ${lib[*]} ${inc[*]}
 }
 
 cleanf() {
-    [ -f $1 ] && rm $1 && echo "deleted $1"
+    [ -f $1 ] && cmd rm $1
 }
 
 cleand() {
-    [ -d $1 ] && rm -r $1 && echo "deleted $1"
+    [ -d $1 ] && cmd rm -r $1
+}
+
+cleanr() {
+    cleand $1/tmp/
+    cleand $1/bin/
 }
 
 clean() {
+    for mod in ${sub[*]}
+    do
+        cleanr $mod
+    done
     cleand lib
+    cleand tmp
     cleanf $name
     return 0
 }
 
-install() {
-    [ "$EUID" -ne 0 ] && echo "Run with sudo to install" && exit
-
-    build && comp
-    [ -f $name ] && mv $name /usr/local/bin/
-
-    echo "Successfully installed $name"
-    return 0
-}
-
-uninstall() {
-    [ "$EUID" -ne 0 ] && echo "Run with sudo to uninstall" && exit
-
-    cleanf /usr/local/bin/$name
-
-    echo "Successfully uninstalled $name"
-    return 0
-}
+if [[ $# -eq 0 ]]; then
+    comp && exit
+fi
 
 case "$1" in
     "build")
         build;;
-    "comp")
-        comp;;
-    "clean")
-        clean;;
     "all")
         build && comp;;
-    "install")
-        install;;
-    "uninstall")
-        uninstall;;
+    "clean")
+        clean;;
     *)
-        echo "Run with 'build' or 'comp' or to build."
-        echo "Use 'install' to build and install in /usr/local"
-        echo "Use 'clean' to remove local builds.";;
+        echo "Illegal option. Use with build, all or clean"
 esac

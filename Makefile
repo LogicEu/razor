@@ -1,56 +1,61 @@
 # razor makefile
 
-STD=-std=c99
-WFLAGS=-Wall -Wextra
-OPT=-O2
-IDIR=-I. -Ispxe
-LIBS=fract utopia imgtool mass
-CC=gcc
-NAME=razor
-SRC=src/*.c
+NAME = razor
 
-LDIR=lib
-IDIR += $(patsubst %,-I%/,$(LIBS))
-LSTATIC=$(patsubst %,lib%.a,$(LIBS))
-LPATHS=$(patsubst %,$(LDIR)/%,$(LSTATIC))
-LFLAGS=$(patsubst %,-L%,$(LDIR))
-LFLAGS += $(patsubst %,-l%,$(LIBS))
-LFLAGS += -lz -lpng -ljpeg -lfreetype
-GL=-lglfw
+CC = gcc
+STD = -std=c99
+WFLAGS = -Wall -Wextra -pedantic
+OPT = -O2
+INC = -I.
+LIB = mass fract utopia imgtool
 
-SCRIPT=build.sh
+SRCDIR = src
+TMPDIR = tmp
+LIBDIR = lib
+
+SCRIPT = build.sh
+
+SRC = $(wildcard $(SRCDIR)/*.c)
+OBJS = $(patsubst $(SRCDIR)/%.c,$(TMPDIR)/%.o,$(SRC))
+LIBS = $(patsubst %,$(LIBDIR)/lib%.a,$(LIB))
+DLIB = $(patsubst %,-L%, $(LIBDIR))
+DLIB += $(patsubst %,-l%, $(LIB))
+INC += $(patsubst %,-I%,$(LIB))
+INC += -Ispxe
+
+DLIB += -lz -lpng -ljpeg -lglfw -lfreetype
 
 OS=$(shell uname -s)
 ifeq ($(OS),Darwin)
-    #OSFLAGS=-mmacos-version-min=10.10
-    GL+=-framework OpenGL
-else 
-	OSFLAGS=-lm -lpthread -D_POSIX_C_SOURCE=199309L
-    GL+=-lGL -lGLEW
+	DLIB += -framework OpenGL
+else
+	DLIB += -lGL -lGLEW -lm
 endif
 
-CFLAGS=$(STD) $(WFLAGS) $(OPT) $(IDIR)
+CFLAGS = $(STD) $(WFLAGS) $(OPT) $(INC)
 
-$(NAME): $(LPATHS) $(SRC)
-	$(CC) -o $@ $(SRC) $(CFLAGS) $(LFLAGS) $(GL) $(OSFLAGS)
+$(NAME): $(OBJS) $(LIBS)
+	$(CC) $(OBJS) -o $@ $(CFLAGS) $(DLIB) $(OPNGL)
 
-$(LDIR)/$(LDIR)%.a: $(LDIR)%.a $(LDIR)
-	mv $< $(LDIR)/
+.PHONY: all clean
 
-$(LDIR): 
-	@[ -d $@ ] || mkdir $@ && echo "mkdir $@"
+all: $(NAME)
 
-$(LDIR)%.a: %
-	cd $^ && make && mv $@ ../
+$(LIBDIR)/lib%.a: %
+	cd $^ && $(MAKE) && mv bin/*.a ../$(LIBDIR)
 
-exe:
-	$(CC) -o $(NAME) $(SRC) $(CFLAGS) $(LFLAGS) $(GL) $(OSFLAGS)
+$(LIBS): | $(LIBDIR)
+
+$(TMPDIR)/%.o: $(SRCDIR)/%.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJS): $(SRC) | $(TMPDIR)
+
+$(TMPDIR):
+	mkdir -p $@
+
+$(LIBDIR):
+	mkdir -p $@
 
 clean: $(SCRIPT)
 	./$^ $@
-    
-install: $(SCRIPT)
-	./$^ $@
- 
-uninstall: $(SCRIPT)
-	./$^ $@ 
