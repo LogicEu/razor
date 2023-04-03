@@ -9,6 +9,7 @@
 * Procedurally Generated Terrain
 * Texture Mapping
 * Basic Shading
+* Z Buffer
 * Font Rendering
 
 > It is meant to be a basic, simple and easy example of how to render 3D triangles
@@ -25,12 +26,12 @@
 | --- | --- |
 | W | Move camera forwards |
 | S | Move camera backwards |
-| D | Move camera right |
-| A | Move camera left |
+| D | Move camera to the right |
+| A | Move camera to the left |
 | Z | Move camera up |
 | X | Move camera down |
 | Space | Switch between full triangle rasterization or wireframe rendering |
-| Escape | Quit razor |
+| Escape | Quit |
 
 ## Submodules
 
@@ -49,7 +50,7 @@
 * [libpng](https://github.com/glennrp/libpng.git)
 * [libz](https://github.com/madler/zlib.git)
 
-> The windowing and rendering system depends on OpenGL libraries aswell:
+> The windowing system depends on OpenGL libraries aswell:
 
 * [GLFW](https://github.com/glfw/glfw.git)
 * [GLEW](https://github.com/nigels-com/glew.git) (only on Linux and Windows)
