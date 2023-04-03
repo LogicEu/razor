@@ -15,7 +15,7 @@
 > in a 2D screen through the scanline and Z buffer algorithms in combination with
 > some 3D math.
 
-![alt text](https://github.com/LogicEu/tracy/blob/main/assets/images/image.png?raw=true)
+![alt text](https://github.com/LogicEu/razor/blob/main/assets/images/image.png?raw=true)
 
 ## Controls
 
@@ -57,7 +57,7 @@
 ## Try it
 
 > If you have all third party dependencies installed on your system you can
-> easily try tracy with the following commands:
+> easily try razor with the following commands:
 
 ```shell
 git clone --recursive https://github.com/LogicEu/razor.git
