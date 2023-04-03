@@ -1,186 +1,210 @@
 #define SPXE_APPLICATION
 #include <razor.h>
+#include <utopia/hash.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <mass.h>
 
-#define PERSPECTIVE_SCALE (2.5)
-#define SENSIBILITY (0.01)
-#define HALF_PI (M_PI * 0.5)
-#define FOV_DEGREES (15.0)
-#define FOV (FOV_DEGREES / (180.0 / M_PI))
+#define TIMEOUT_TIME (100)
+#define SENSIBILITY (0.01F)
+#define HALF_PI (M_PI * 0.5F)
+#define FOV_DEGREES (4.0F)
+#define FOV (FOV_DEGREES / (180.0F / M_PI))
+#define FLARGE 1000000.0F
+#define HCOLOR_COUNT 8
 
-static RZtriangle rzTriangleProject(const mat4* mvp, const vec3* pos, const vec2* uv, const vec3* normals)
+static bmp_t bmp_height_colors(void)
 {
-    RZtriangle t;
-    for (int i = 0; i < 3; ++i) {
-        vec4 p = vec4_mult_mat4((vec4){pos[i].x, pos[i].y, pos[i].z, 1.0}, *mvp);
-        vec4 n = vec4_mult_mat4((vec4){normals[i].x, normals[i].y, normals[i].z, 0.0}, *mvp);
-        t.vertices[i].pos.x = PERSPECTIVE_SCALE * ((p.x / p.w) * (float)spxe.scrres.width) / p.w + spxe.scrres.width * 0.5;
-        t.vertices[i].pos.y = PERSPECTIVE_SCALE * ((p.y / p.w) * (float)spxe.scrres.height) / p.w + spxe.scrres.height * 0.5;
-        t.vertices[i].pos.z = 1.0 / p.z;
-        t.vertices[i].uv.x = uv[i].x * t.vertices[i].pos.z;
-        t.vertices[i].uv.y = uv[i].y * t.vertices[i].pos.z;
-        t.vertices[i].normal = (vec3){n.x, n.y, n.z};
+    uint8_t colors[HCOLOR_COUNT][4] = {
+        {0, 0, 255, 255},       // Blue
+        {100, 100, 255, 255},   // Light blue
+        {0, 255, 0, 255},       // Light green
+        {0, 155, 0, 255},       // Green
+        {205, 105, 25, 255},    // Light brown
+        {150, 75, 0, 255},      // Brown
+        {75, 75, 105, 255},     // Grey
+        {235, 235, 255, 255}    // White && Light blue
+    };
+
+    bmp_t bmp = bmp_new(HCOLOR_COUNT, 1, sizeof(Px));
+    for (unsigned int i = 0; i < HCOLOR_COUNT; ++i) {
+        memcpy(px_at(&bmp, i, 0), colors[i], sizeof(Px));
     }
-    return t;
+    
+    return bmp;
 }
 
-static float rzTriangleArea(const RZtriangle t)
+static size_t hash_nohash(const void* key)
 {
-    return 0.5 *
-       ((t.vertices[0].pos.x * t.vertices[1].pos.y - t.vertices[1].pos.x * t.vertices[0].pos.y) +
-        (t.vertices[1].pos.x * t.vertices[2].pos.y - t.vertices[2].pos.x * t.vertices[1].pos.y) +
-        (t.vertices[2].pos.x * t.vertices[0].pos.y - t.vertices[0].pos.x * t.vertices[2].pos.y));
+    return *(size_t*)key % 100000;
 }
 
-static vec3 rzTriangleNormal(const RZtriangle t)
+static void mesh3D_normalize_smooth(Mesh3D* mesh)
 {
-    vec3 e1 = _vec3_sub(t.vertices[1].pos, t.vertices[0].pos);
-    vec3 e2 = _vec3_sub(t.vertices[2].pos, t.vertices[0].pos);
-    return vec3_normal(_vec3_cross(e1, e2));
-}
+    const size_t count = mesh->vertices.size;
+    const vec3* vertices = mesh->vertices.data;
+    vec3* normals = mesh->normals.data;
 
-static void rzMeshNormalAverage(const struct vector* positions, struct vector* normals)
-{
-    struct vector eq = vector_create(sizeof(size_t));
-    vec3* pos = positions->data, *n = normals->data;
-    for (size_t i = 0; i < positions->size; ++i) {
-        vec3 sum = {0.0, 0.0, 0.0};
-        for (size_t j = 0; j < positions->size; ++j) {
-            if (!memcmp(pos + i, pos + j, sizeof(vec3))) {
-                sum = vec3_add(sum, n[j]);
-                vector_push(&eq, &j);
+    struct hash found = hash_reserve(sizeof(size_t), count);
+    hash_overload(&found, &hash_nohash);
+
+    for (size_t i = 0; i < count; ++i) {
+        if (hash_search(&found, &i)) {
+            continue;
+        }
+
+        const size_t found_count = found.size;
+        hash_push(&found, &i);
+        vec3 normal = normals[i];
+
+        for (size_t j = 0; j < count; ++j) {
+            if (i != j && !memcmp(vertices + i, vertices + j, sizeof(vec3))) {
+                hash_push(&found, &j);
+                normal = vec3_add(normal, normals[j]);
             }
         }
 
-        sum = vec3_normal(sum);
-        const size_t* indices = eq.data;
-        for (size_t j = 0; j < eq.size; ++j) {
-            n[indices[j]] = sum;
+        const size_t* indices = found.data;
+        normal = vec3_normal(normal);
+        for (size_t j = found_count; j < found.size; ++j) {
+            normals[indices[j]] = normal;
         }
-        
-        vector_clear(&eq);
     }
-    vector_free(&eq);
+
+    hash_free(&found);
 }
 
-static void rzMeshNormalize(Mesh3D* mesh)
+static Mesh3D mesh3D_perlin(const size_t size)
 {
-    RZtriangle t;
-    const vec3 vZero = {0.0, 0.0, 0.0};
-
-    const vec3* vertices = mesh->vertices.data;
-    const vec2* uvs = mesh->uvs.data;
-    const size_t size = mesh->vertices.size;
-
-    vector_free(&mesh->normals);
-    mesh->normals = vector_reserve(sizeof(vec3), size);
-    
-    for (size_t i = 0; i < size; i += 3) {
-        for (int j = 0; j < 3; ++j) {
-            t.vertices[j] = (RZvertex){vertices[i + j], uvs[i + j], vZero};
-        }
-        
-        const vec3 normal = rzTriangleNormal(t);
-        for (int j = 0; j < 3; ++j) {
-            vector_push(&mesh->normals, &normal);
-        }
+    size_t i = 0;
+    Mesh3D mesh = mesh3D_shape_plane(size, size);
+    vec3* vertices = mesh.vertices.data;
+    const size_t count = mesh.vertices.size;
+    float maxy = -FLARGE, miny = FLARGE;
+    for (size_t i = 0; i < count; ++i) {
+        float h = perlin2d(vertices[i].x, vertices[i].z, 0.2f, 32, 0) * 16.0f;
+        vertices[i].y = h;
+        if (h > maxy)
+            maxy = h;
+        if (h < miny) 
+            miny = h;
     }
+
+    for (i = 0; i < count; ++i) {
+        vec2 uv = {
+            ilerpf(miny, maxy, vertices[i].y), 
+            0.0f
+        };
+        vector_push(&mesh.uvs, &uv);
+    }
+
+    const float offset = (float)size * 0.5f;
+    mesh3D_move(&mesh, vec3_new(-offset, -maxy, -offset));
+    mesh3D_normalize_faces(&mesh);
+    mesh3D_normalize_smooth(&mesh);
+    return mesh;
+}
+
+static RZmodel rzModelPerlin(bmp_t* texture, const size_t size)
+{
+    RZmodel model;
+    model.mesh = mesh3D_perlin(size);
+    model.texture = texture;
+    return model;
 }
 
 int main(const int argc, char** argv)
 {
-    int width = 200, height = 150, mousex, mousey;  
-    for (int i = 1; i < argc - 1; ++i) {
+    const char* imgpath = "assets/textures/crate.png";
+    const char* fontpath = "assets/fonts/Pixeled.ttf";
+    const char* modelpath = NULL;
+    
+    char uibuf[0xff] = "Razor:";
+    int mousex, mousey, width = 400, height = 300, uitimer = TIMEOUT_TIME;  
+
+    for (int i = 1; i < argc; ++i) {
         if (argv[i][0] == '-') {
             if (argv[i][1] == 'w') {
                 width = atoi(argv[++i]);
-            }
-            else if (argv[i][1] == 'h') {
+            } else if (argv[i][1] == 'h') {
                 height = atoi(argv[++i]);
             }
+        } 
+        else if (!modelpath) {
+            modelpath = argv[i];
         }
+        else imgpath = argv[i];
     }
 
-    const char* fileimg = "assets/textures/image.png";
-    const char* filefont = "assets/fonts/Pixeled.ttf";
-    const char* fileobj = "assets/models/voxel.obj";
-
-    bmp_t bmp = bmp_load(fileimg);
-    if (!bmp.pixels) {
-        printf("razor could not open image file '%s'.\n", fileimg);
-        return EXIT_FAILURE;
-    }
-
-    RZfont* font = rzFontLoad(filefont, 10);
+    bmp_t bmp;
+    RZmodel model;
+    RZfont* font = rzFontLoad(fontpath, 10);
+    
     if (!font) {
-        printf("razor could not open font file '%s'.\n", filefont);
+        fprintf(stderr, "razor could not open font file '%s'.\n", fontpath);
         return EXIT_FAILURE;
     }
 
-    Mesh3D mesh = mesh3D_load(fileobj);
-    if (!mesh.vertices.size) {
-        printf("razor could not open 3D model from file '%s'.\n", fileobj);
-        return EXIT_FAILURE;
+    if (modelpath) {
+        bmp = bmp_load(imgpath);
+        if (!bmp.pixels) {
+            fprintf(stderr, "razor could not open image file '%s'.\n", imgpath);
+            rzFontFree(font);
+            return EXIT_FAILURE;
+        }
+
+        model = rzModelLoad(modelpath, &bmp);
+        if (!model.mesh.vertices.size) {
+            fprintf(stderr, "razor could not open 3D model file '%s'.\n", modelpath);
+            rzFontFree(font);
+            bmp_free(&bmp);
+            return EXIT_FAILURE;
+        }
+    } else {
+        bmp = bmp_height_colors();
+        model = rzModelPerlin(&bmp, 100);
     }
-
-    if (!mesh.uvs.size) {
-        mesh.uvs = vector_reserve(sizeof(vec2), mesh.vertices.size);
-        memset(mesh.uvs.data, 0, mesh.uvs.size * mesh.uvs.bytes);
-    }
-
-    rzMeshNormalize(&mesh);
-    rzMeshNormalAverage(&mesh.vertices, &mesh.normals);
-
-    const size_t vertcount =  mesh.vertices.size;;
-    const vec3* vertices = mesh.vertices.data;
-    const vec2* uvs = mesh.uvs.data;
-    const vec3* normals = mesh.normals.data;
 
     Px* pixbuf = spxeStart("razor", 800, 600, width, height);
     if (!pixbuf) {
-        printf("razor could not initiate spxe pixel engine.\n");
+        fprintf(stderr, "razor could not initiate spxe pixel engine.\n");
+        bmp_free(&bmp);
+        rzModelFree(&model);
+        rzFontFree(font);
         return EXIT_FAILURE;
     }
-    
+
     spxeMouseVisible(0);
 
     RZframebuffer framebuffer = rzFramebufferCreate((bmp_t){width, height, sizeof(Px), (unsigned char*)pixbuf});
     rzFramebufferClearColor((Px){125, 125, 255, 255});
 
     float angle = 0.0;
-    const float halfWidth = (float)width * 0.5;
-    const float halfHeight = (float)height * 0.5;
+    const float halfWidth = (float)width * 0.5F;
+    const float halfHeight = (float)height * 0.5F;
     const float aspect = (float)width / (float)height;
     const mat4 proj = mat4_perspective(FOV, aspect, Z_NEAR, Z_FAR);
-    
-    vec3 dir, right, up, pos = {-3.0, 1.0, 8.0};
+
+    vec3 dir, right, up, pos = {-3.0F, 1.0F, 8.0F};
     mat4 view, mvp, scale;
     vec2 mouse;
 
     const Px red = {255, 0, 0, 255};
-    const ivec2 texPos = {10.0, 10.0};
-    const vec3 vZero = {0.0, 0.0, 0.0};
-    const vec3 vOne = {1.0, 1.0, 1.0};
-    const vec3 vRot = {0.0, 1.0, 0.0};
+    const ivec2 texPos = {10.0F, 10.0F};
+    const vec3 vZero = {0.0F, 0.0F, 0.0F};
+    const vec3 vOne = {1.0F, 1.0F, 1.0F};
+    const vec3 vRot = {0.0F, 1.0F, 0.0F};
 
     float T = spxeTime();
     while (spxeRun(pixbuf)) {
         float t = spxeTime();
         float dT = t - T;
         T = t;
-    
-        //printf("T: %f\n", dT);
 
         const float f = dT * 10.0;
         angle += dT;
 
         if (spxeKeyPressed(ESCAPE)) {
             break;
-        }
-        if (spxeKeyDown(P)) {
-            printf("Pos: %f, %f, %f\nDir: %f, %f, %f\n", pos.x, pos.y, pos.z, dir.x, dir.y, dir.z);
         }
 
         if (spxeKeyDown(W)) {
@@ -201,6 +225,14 @@ int main(const int argc, char** argv)
         if (spxeKeyDown(X)) {
             pos = vec3_sub(pos, vec3_mult(up, f));
         }
+        if (spxeKeyPressed(SPACE)) {
+            rzRasterModeSwitch();
+        }
+
+        if (!uitimer--) {
+            sprintf(uibuf, "Razor: %f", dT);
+            uitimer = TIMEOUT_TIME;
+        }
 
         spxeMousePos(&mousex, &mousey);
         mouse = (vec2){((float)mousex - halfWidth) * SENSIBILITY, ((float)(height - mousey) - halfHeight) * SENSIBILITY};
@@ -214,20 +246,13 @@ int main(const int argc, char** argv)
         mvp = mat4_mult(proj, mat4_mult(view, scale));
 
         rzFramebufferClear(&framebuffer);
-        for (size_t i = 0; i < vertcount; i += 3) {
-            RZtriangle t = rzTriangleProject(&mvp, vertices + i, uvs + i, normals + i);
-            if (rzTriangleArea(t) < 0.0) {
-                rzRasterize(&framebuffer, &bmp, t);
-            }
-        }
-        rzFontDrawText(&framebuffer.bitmap, font, "Razor", red, texPos);
+        rzModelDraw(&framebuffer, &model, &mvp);
+        rzFontDrawText(&framebuffer.bitmap, font, uibuf, red, texPos);
     }
 
     free(framebuffer.zbuffer);
-    mesh3D_free(&mesh);
+    rzModelFree(&model);
     bmp_free(&bmp);
     rzFontFree(font);
-    spxeEnd(pixbuf);
-
-    return EXIT_SUCCESS;
+    return spxeEnd(pixbuf);
 }

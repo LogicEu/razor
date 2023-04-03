@@ -37,15 +37,14 @@ extern "C" {
 ******************/
 
 #include <spxe.h>       /* Px       */
-#include <fract.h>      /* vec3     */
 #include <imgtool.h>    /* bmp_t    */
+#include <mass.h>       /* Mesh3D   */
+
+#define ulerp(A, B, t) (unsigned char)(int)_lerpf((float)(A), (float)(B), (t))
+#define pxlerp(A, B, t) (Px){ulerp(A.r, B.r, t), ulerp(A.g, B.g, t), ulerp(A.b, B.b, t), ulerp(A.a, B.a, t)}
 
 #define Z_NEAR 0.1
 #define Z_FAR 1000.0
-
-#define swap(A, B, Type) do { Type tmp = (A); (A) = (B); (B) = tmp; } while (0)
-#define ulerp(A, B, t) (unsigned char)(int)_lerpf((float)(A), (float)(B), (t))
-#define pxlerp(A, B, t) (Px){ulerp(A.r, B.r, t), ulerp(A.g, B.g, t), ulerp(A.b, B.b, t), ulerp(A.a, B.a, t)}
 
 typedef struct ivec2 {
     int x, y;
@@ -66,6 +65,11 @@ typedef struct RZtriangle {
     RZvertex vertices[3];
 } RZtriangle;
 
+typedef struct RZmodel {
+    Mesh3D mesh;
+    bmp_t* texture;
+} RZmodel;
+
 typedef struct RZfont {
     unsigned char* pixmap;
     ivec2 size;
@@ -74,6 +78,18 @@ typedef struct RZfont {
 } RZfont;
 
 void rzRasterize(RZframebuffer* framebuffer, const bmp_t* bmp, RZtriangle tri);
+void rzRasterModeSwitch(void);
+
+RZtriangle rzTriangleProject(const mat4* mvp, const vec3* pos, const vec2* uv, const vec3* normals);
+float rzTriangleArea(const RZtriangle t);
+vec3 rzTriangleNormal(const RZtriangle t);
+
+void rzMeshNormalize(Mesh3D* mesh);
+void rzMeshNormalAverage(const struct vector* positions, struct vector* normals);
+
+RZmodel rzModelLoad(const char* path, bmp_t* texture);
+void rzModelDraw(RZframebuffer* framebuffer, const RZmodel* model, const mat4* mvp);
+void rzModelFree(RZmodel* model);
 
 RZframebuffer rzFramebufferCreate(const bmp_t bmp);
 void rzFramebufferFree(RZframebuffer* framebuffer);
