@@ -35,7 +35,7 @@ static bmp_t bmp_height_colors(void)
 
 static size_t hash_nohash(const void* key)
 {
-    return *(size_t*)key % 100000;
+    return *(size_t*)key;
 }
 
 static void mesh3D_normalize_smooth(Mesh3D* mesh)
@@ -81,7 +81,7 @@ static Mesh3D mesh3D_perlin(const size_t size)
     const size_t count = mesh.vertices.size;
     float maxy = -FLARGE, miny = FLARGE;
     for (size_t i = 0; i < count; ++i) {
-        float h = perlin2d(vertices[i].x, vertices[i].z, 0.2f, 32, 0) * 16.0f;
+        float h = perlin2d(vertices[i].x, vertices[i].z, 0.2f, 2, 0) * 16.0f;
         vertices[i].y = h;
         if (h > maxy)
             maxy = h;
@@ -161,7 +161,7 @@ int main(const int argc, char** argv)
         }
     } else {
         bmp = bmp_height_colors();
-        model = rzModelPerlin(&bmp, 100);
+        model = rzModelPerlin(&bmp, 40);
     }
 
     Px* pixbuf = spxeStart("razor", 800, 600, width, height);
