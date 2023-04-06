@@ -1,6 +1,12 @@
 # razor
 
-> Simple 3D software rasterizer written in C on top of my 
+> small 3D software rasterizer in C
+
+![alt text](https://github.com/LogicEu/razor/blob/main/assets/images/razor.png?raw=true)
+
+## About
+
+> Razor is a simple 3D software rasterizer written from scratch in C on top of my 
 > [simple pixel engine](https://github.com/LogicEu/spxe.git). Some of the features 
 > it supports are:
 
@@ -30,7 +36,8 @@
 | A | Move camera to the left |
 | Z | Move camera up |
 | X | Move camera down |
-| Space | Switch between full triangle rasterization or wireframe rendering |
+| Space | Switch between full triangle rasterization and wireframe rendering |
+| Shift | Switch between normal and negative color mode |
 | Escape | Quit |
 
 ## Submodules

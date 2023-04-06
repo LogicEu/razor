@@ -112,6 +112,15 @@ static RZmodel rzModelPerlin(bmp_t* texture, const size_t size)
     return model;
 }
 
+static void rzNegative(Px* pixbuf, const size_t count)
+{
+    for (size_t i = 0; i < count; ++i) {
+        pixbuf[i].r = 255 - pixbuf[i].r;
+        pixbuf[i].g = 255 - pixbuf[i].g;
+        pixbuf[i].b = 255 - pixbuf[i].b;
+    }
+}
+
 int main(const int argc, char** argv)
 {
     const char* imgpath = "assets/textures/crate.png";
@@ -119,7 +128,7 @@ int main(const int argc, char** argv)
     const char* modelpath = NULL;
     
     char uibuf[0xff] = "Razor:";
-    int mousex, mousey, width = 400, height = 300, uitimer = TIMEOUT_TIME;  
+    int mousex, mousey, width = 400, height = 300, uitimer = TIMEOUT_TIME, neg = 0;  
 
     for (int i = 1; i < argc; ++i) {
         if (argv[i][0] == '-') {
@@ -176,7 +185,9 @@ int main(const int argc, char** argv)
     spxeMouseVisible(0);
 
     RZframebuffer framebuffer = rzFramebufferCreate((bmp_t){width, height, sizeof(Px), (unsigned char*)pixbuf});
-    rzFramebufferClearColor((Px){125, 125, 255, 255});
+    rzFramebufferClearColor((Px){255, 255, 255, 255});
+
+    const size_t pixbufsize = width * height;
 
     float angle = 0.0;
     const float halfWidth = (float)width * 0.5F;
@@ -228,6 +239,9 @@ int main(const int argc, char** argv)
         if (spxeKeyPressed(SPACE)) {
             rzRasterModeSwitch();
         }
+        if (spxeKeyPressed(LEFT_SHIFT)) {
+            neg = !neg;
+        }
 
         if (!uitimer--) {
             sprintf(uibuf, "Razor: %f", dT);
@@ -248,6 +262,10 @@ int main(const int argc, char** argv)
         rzFramebufferClear(&framebuffer);
         rzModelDraw(&framebuffer, &model, &mvp);
         rzFontDrawText(&framebuffer.bitmap, font, uibuf, red, texPos);
+
+        if (neg) {
+            rzNegative(pixbuf, pixbufsize);
+        }
     }
 
     free(framebuffer.zbuffer);
